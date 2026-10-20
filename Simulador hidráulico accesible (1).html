@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador hidráulico: distribución equitativa de presión</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E💧%3C/text%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f4f7fa; --card:#ffffff; --text:#1f2937; --muted:#475569; --primary:#17325c;
+  --btn:#1e4e8c; --btn-hover:#17325c; --btn-text:#ffffff;
+  --border:#cbd5e1; --stat:#eaf0f6; --ok:#0f6b68; --warn:#9a4a00; --bad:#b42318; --focus:#b45309;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1621; --card:#16212f; --text:#e6edf5; --muted:#b4c0cf; --primary:#cfe0f7;
+    --btn:#3b82d6; --btn-hover:#5b9ae6; --btn-text:#06121f;
+    --border:#334155; --stat:#1d2b3d; --ok:#5fd3cd; --warn:#f5a85a; --bad:#ff8a80; --focus:#fbbf24; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1621; --card:#16212f; --text:#e6edf5; --muted:#b4c0cf; --primary:#cfe0f7;
+  --btn:#3b82d6; --btn-hover:#5b9ae6; --btn-text:#06121f;
+  --border:#334155; --stat:#1d2b3d; --ok:#5fd3cd; --warn:#f5a85a; --bad:#ff8a80; --focus:#fbbf24; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--text);font:1rem/1.6 system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:20px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+.skip{position:absolute;left:12px;top:-60px;background:var(--btn);color:var(--btn-text);padding:10px 14px;border-radius:6px;z-index:20;font-weight:700}
+.skip:focus{top:12px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+header{text-align:center;max-width:70ch;margin:0 auto 24px}
+h1{color:var(--primary);font-size:clamp(1.5rem,4vw,2rem);line-height:1.2;margin:0 0 6px}
+h2{color:var(--primary);font-size:1.15rem;margin:0 0 12px}
+header p{margin:0;color:var(--muted)}
+.layout{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:20px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.canvas-wrap{border-radius:10px;overflow-x:auto;background:#0b1220}
+canvas{display:block;width:100%;min-width:720px;height:auto}
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:var(--stat);padding:6px;border-radius:12px;margin-bottom:14px}
+@media (max-width:520px){.seg{grid-template-columns:1fr}}
+.seg button{background:transparent;color:var(--text);border:2px solid transparent;border-radius:8px;padding:10px 12px;min-height:48px;font:inherit;font-weight:700;cursor:pointer}
+.seg button:hover{background:var(--card)}
+.seg button[aria-pressed="true"]{background:var(--btn);color:var(--btn-text)}
+.seg button[aria-pressed="true"]::before{content:"✓ "}
+.btn{background:transparent;color:var(--primary);border:2px solid var(--btn);border-radius:8px;padding:10px 16px;min-height:44px;font:inherit;font-weight:700;cursor:pointer}
+.btn:hover{background:var(--stat)}
+.btn[aria-pressed="true"]{background:var(--btn);color:var(--btn-text)}
+.bar{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;margin-top:14px}
+.mode{margin:0;font-weight:700;color:var(--ok)}
+.mode.bad{color:var(--bad)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:12px 0 0;padding:0;list-style:none;font-size:.9rem;color:var(--muted)}
+.legend i{display:inline-block;vertical-align:-2px;margin-right:6px}
+.i-vrp{width:12px;height:12px;background:#f59e0b;border-radius:2px}
+.i-gau{width:13px;height:13px;border:2px solid #a78bfa;border-radius:50%;background:#0b1220}
+.i-pipe{width:20px;height:5px;background:#38bdf8;border-radius:3px}
+.field{margin-bottom:18px}
+.field label{display:flex;justify-content:space-between;gap:10px;font-weight:700;color:var(--primary);margin-bottom:6px}
+.field output{font-variant-numeric:tabular-nums;color:var(--text)}
+.field input[type=range]{width:100%;height:28px;accent-color:var(--btn)}
+.hint{font-size:.9rem;color:var(--muted);margin:2px 0 0}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border)}
+thead th{color:var(--muted);font-weight:600}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.st-ok{color:var(--ok);font-weight:700}.st-warn{color:var(--warn);font-weight:700}.st-bad{color:var(--bad);font-weight:700}
+.status{background:var(--stat);border-radius:8px;padding:12px;margin:0}
+.guide p,.guide li{max-width:70ch}.guide ul{padding-left:20px}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media (forced-colors:active){.seg button,.btn{border:2px solid ButtonText}}
+</style>
+</head>
+<body>
+<a class="skip" href="#panel">Saltar al panel de control</a>
+<header>
+  <h1>Simulador hidráulico de un fraccionamiento</h1>
+  <p>Compara cómo se reparte la presión del agua en una red lineal tradicional y en una red mallada con válvulas reguladoras (VRP).</p>
+</header>
+
+<main class="layout">
+  <div>
+    <section class="card" aria-labelledby="t-sim">
+      <h2 id="t-sim">Simulación</h2>
+      <div class="seg" role="group" aria-label="Tipo de red">
+        <button type="button" id="bConv" aria-pressed="false">Red convencional (sin prototipo)</button>
+        <button type="button" id="bMesh" aria-pressed="true">Prototipo activado (malla + VRP)</button>
+      </div>
+      <div class="canvas-wrap" role="region" aria-label="Esquema de la red (desplazable en pantallas pequeñas)" tabindex="0">
+        <canvas id="cv" width="840" height="540" role="img" aria-labelledby="cv-desc"></canvas>
+      </div>
+      <p id="cv-desc" class="vh"></p>
+      <ul class="legend" aria-label="Leyenda">
+        <li><i class="i-pipe"></i>Tubería</li>
+        <li><i class="i-vrp"></i>VRP (válvula reguladora)</li>
+        <li><i class="i-gau"></i>Manómetro</li>
+      </ul>
+      <div class="bar">
+        <p class="mode" id="modeStatus">Modo: red mallada con válvulas reguladoras activas</p>
+        <button type="button" class="btn" id="toggleAnim" aria-pressed="false">Pausar animación</button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="t-tab">
+      <h2 id="t-tab">Presión por vivienda</h2>
+      <table>
+        <caption class="vh">Presión y estado de cada vivienda, de la más baja a la más alta</caption>
+        <thead><tr><th scope="col">Vivienda</th><th scope="col">Presión</th><th scope="col">Estado</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <p class="hint">Rango adecuado: de 0,6 a 2,8 bar.</p>
+    </section>
+
+    <section class="card guide" aria-labelledby="t-guia">
+      <h2 id="t-guia">Guía técnica del prototipo</h2>
+      <p>El sistema resuelve el desnivel y la pérdida de carga con un circuito mallado (lazos) y una válvula reguladora de presión (VRP) mecánica de resorte en cada acometida.</p>
+      <ul>
+        <li><strong>Bomba o tanque:</strong> fuente principal a presión constante.</li>
+        <li><strong>Tubería mallada:</strong> ofrece varias trayectorias al agua y reduce la pérdida de carga; el agua regresa al tanque por el lazo.</li>
+        <li><strong>VRP mecánica:</strong> restringe el paso solo cuando la presión de entrada supera el umbral seguro (1,5 bar en este modelo) y evita golpes de ariete en las casas cercanas.</li>
+      </ul>
+      <p>Modelo simplificado: la presión en cada casa es la de la bomba menos la altura y la fricción acumulada. La malla reduce la fricción y la VRP recorta el exceso.</p>
+    </section>
+  </div>
+
+  <aside id="panel" tabindex="-1" aria-labelledby="t-panel">
+    <section class="card">
+      <h2 id="t-panel">Panel de control</h2>
+      <div class="field">
+        <label for="pump"><span>Potencia de la bomba (presión base)</span><output id="pumpOut" for="pump"></output></label>
+        <input type="range" id="pump" min="1" max="5" step="0.1" value="3">
+        <p class="hint">De 1 (baja) a 5 (alta).</p>
+      </div>
+      <div class="field">
+        <label for="dem"><span>Demanda simultánea</span><output id="demOut" for="dem"></output></label>
+        <input type="range" id="dem" min="0" max="2" step="0.1" value="1">
+        <p class="hint">De 0 (sin consumo) a 2 (consumo doble).</p>
+      </div>
+      <div style="margin-bottom:18px"><button type="button" class="btn" id="reset">Restablecer valores</button></div>
+      <h3 style="font-size:1rem;color:var(--primary);margin:0 0 6px">Estado del sistema</h3>
+      <p class="status" id="sysText"></p>
+    </section>
+  </aside>
+</main>
+
+<div class="vh" role="status" aria-live="polite" id="live"></div>
+
+<script>
+(function(){
+  var W=840,H=540;
+  var cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  var dpr=Math.max(1,Math.min(3,window.devicePixelRatio||1));
+  cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr);
+  var $=function(id){return document.getElementById(id)};
+  var pumpIn=$('pump'),demIn=$('dem'),pumpOut=$('pumpOut'),demOut=$('demOut');
+  var modeEl=$('modeStatus'),bMesh=$('bMesh'),bConv=$('bConv'),animBtn=$('toggleAnim');
+  var rows=$('rows'),sysText=$('sysText'),live=$('live'),desc=$('cv-desc');
+  var fmt=function(n){return n.toLocaleString('es-MX',{minimumFractionDigits:1,maximumFractionDigits:1})};
+
+  var mesh=true,pump=3,dem=1;
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var running=!reduce;
+  var N=6, SET=1.5;
+  var names=['C1 (más baja)','C2','C3','C4','C5','C6 (más alta)'];
+
+  // Geometría: tubería principal inclinada
+  var X0=150, Y0=420, SLOPE=0.25;
+  function pipeY(x){return Y0-SLOPE*(x-X0)}
+  var MAIN=[[150,420],[780,pipeY(780)]];
+  var LOOP=[[780,pipeY(780)],[805,pipeY(780)],[805,505],[75,505],[75,440]];
+
+  function calc(){
+    var h=pump*1.1,out=[];
+    for(var i=0;i<N;i++){
+      var elev=0.3*i, fr=0.06*dem*((i+1)*(i+2)/2)*(mesh?0.3:1);
+      var inlet=Math.max(0,h-elev-fr);
+      var p=mesh?Math.min(inlet,SET):inlet;
+      out.push(Math.min(4.5,p));
+    }
+    return out;
+  }
+  function state(p){
+    if(p>2.8) return {k:'bad',t:'Sobrepresión',c:'#f87171'};
+    if(p<0.6) return {k:'warn',t:'Insuficiente',c:'#fbbf24'};
+    return {k:'ok',t:'Adecuada',c:'#34d399'};
+  }
+
+  // Recorrido de las partículas sobre la polilínea
+  function pathInfo(pts){
+    var segs=[],L=0;
+    for(var i=1;i<pts.length;i++){
+      var dx=pts[i][0]-pts[i-1][0],dy=pts[i][1]-pts[i-1][1],l=Math.hypot(dx,dy);
+      segs.push({a:pts[i-1],b:pts[i],l:l,s:L}); L+=l;
+    }
+    return {segs:segs,L:L};
+  }
+  var pMain=pathInfo(MAIN), pFull=pathInfo(MAIN.concat(LOOP.slice(1)));
+  function at(info,s){
+    s=((s%info.L)+info.L)%info.L;
+    for(var i=0;i<info.segs.length;i++){
+      var g=info.segs[i];
+      if(s<=g.s+g.l){var t=(s-g.s)/g.l;return [g.a[0]+(g.b[0]-g.a[0])*t,g.a[1]+(g.b[1]-g.a[1])*t]}
+    }
+    return info.segs[info.segs.length-1].b;
+  }
+  var offset=0,last=0;
+
+  function poly(pts){ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(var i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);ctx.stroke()}
+  function pipe(pts){
+    ctx.lineCap='round';ctx.lineJoin='round';
+    ctx.strokeStyle='#1d4ed8';ctx.lineWidth=11;poly(pts);
+    ctx.strokeStyle='#38bdf8';ctx.lineWidth=5;poly(pts);
+  }
+  function txt(s,x,y,font,col,al){ctx.font=font;ctx.fillStyle=col;ctx.textAlign=al||'left';ctx.fillText(s,x,y)}
+
+  function draw(P){
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#0b1220';ctx.fillRect(0,0,W,H);
+
+    // Terreno
+    ctx.fillStyle='#111c2e';
+    ctx.beginPath();ctx.moveTo(150,462);ctx.lineTo(780,pipeY(780)+42);ctx.lineTo(780,490);ctx.lineTo(150,490);ctx.closePath();ctx.fill();
+    txt('Terreno inclinado (desnivel del fraccionamiento)',170,478,'13px system-ui,sans-serif','#b6c4d6');
+
+    // Tuberías
+    if(mesh) pipe(LOOP); else {
+      txt('Sin lazo de retorno',440,498,'13px system-ui,sans-serif','#8ea0b6','center');
+    }
+    pipe(MAIN);
+
+    // Tanque y bomba
+    ctx.fillStyle='#10304f';ctx.fillRect(40,350,70,90);
+    ctx.fillStyle='#1e6a9c';ctx.fillRect(40,378,70,62);
+    ctx.strokeStyle='#60a5fa';ctx.lineWidth=2;ctx.strokeRect(40,350,70,90);
+    txt('Tanque',75,340,'bold 13px system-ui,sans-serif','#e5edf7','center');
+    ctx.beginPath();ctx.arc(128,420,23,0,7);ctx.fillStyle='#0b2a3d';ctx.fill();
+    ctx.strokeStyle='#22d3ee';ctx.lineWidth=3;ctx.stroke();
+    txt('Bomba',128,424,'bold 11px system-ui,sans-serif','#e5edf7','center');
+
+    // Casas
+    for(var i=0;i<N;i++) house(i,P[i]);
+
+    // Partículas de agua
+    var info=mesh?pFull:pMain, gap=20, n=Math.floor(info.L/gap);
+    ctx.fillStyle='#e0f7ff';
+    for(var k=0;k<n;k++){
+      var q=at(info,offset+k*gap);
+      ctx.beginPath();ctx.arc(q[0],q[1],2.6,0,7);ctx.fill();
+    }
+  }
+
+  function house(i,p){
+    var cx=190+i*104, py=pipeY(cx), bot=py-100, s=state(p);
+    // acometida
+    pipe([[cx,bot+36],[cx,py]]);
+    // casa
+    ctx.fillStyle='#1c2738';ctx.strokeStyle=s.c;ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(cx-34,bot-36);ctx.lineTo(cx,bot-58);ctx.lineTo(cx+34,bot-36);ctx.closePath();ctx.fill();ctx.stroke();
+    ctx.fillRect(cx-28,bot-36,56,36);ctx.strokeRect(cx-28,bot-36,56,36);
+    txt('C'+(i+1),cx,bot-13,'bold 15px system-ui,sans-serif','#f1f5f9','center');
+    txt(Math.round(dem*50)+'% consumo',cx,bot-64,'12px system-ui,sans-serif','#bae6fd','center');
+    // lectura
+    txt(fmt(p)+' bar',cx,bot+16,'bold 14px system-ui,sans-serif',s.c,'center');
+    txt((s.k==='bad'?'▲ ':s.k==='warn'?'▼ ':'● ')+s.t,cx,bot+31,'12px system-ui,sans-serif','#e5edf7','center');
+    // VRP
+    var vy=py-38;
+    if(mesh){
+      ctx.fillStyle='#f59e0b';ctx.fillRect(cx-9,vy-9,18,18);
+      ctx.fillStyle='#1f2937';ctx.fillRect(cx-5,vy-1.5,10,3);
+    }
+    // manómetro
+    var gx=cx+25,gy=py-60;
+    ctx.beginPath();ctx.arc(gx,gy,13,0,7);ctx.fillStyle='#0b1220';ctx.fill();
+    ctx.strokeStyle='#a78bfa';ctx.lineWidth=2.5;ctx.stroke();
+    var a=Math.PI*0.75+Math.min(1,p/4.5)*Math.PI*1.5;
+    ctx.strokeStyle='#e5edf7';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(gx,gy);ctx.lineTo(gx+9*Math.cos(a),gy+9*Math.sin(a));ctx.stroke();
+  }
+
+  // Interfaz accesible
+  var lastRows='',lastDesc='',lastAlert='\u0001',timer=null;
+  function updateUI(announce){
+    var P=calc(),html='',sum=[],g={bad:[],warn:[]};
+    for(var i=0;i<N;i++){
+      var s=state(P[i]);
+      html+='<tr><th scope="row">'+names[i]+'</th><td class="num">'+fmt(P[i])+' bar</td><td class="st-'+s.k+'">'+s.t+'</td></tr>';
+      sum.push('C'+(i+1)+' '+fmt(P[i])+' bar, '+s.t.toLowerCase());
+      if(g[s.k]) g[s.k].push('C'+(i+1));
+    }
+    if(html!==lastRows){rows.innerHTML=html;lastRows=html}
+    var d=(mesh?'Red mallada con válvulas reguladoras y lazo de retorno al tanque. ':'Red lineal convencional sin válvulas reguladoras. ')+
+      'Seis casas, de C1 (la más baja, junto a la bomba) a C6 (la más alta). '+sum.join('. ')+'.';
+    if(d!==lastDesc){desc.textContent='Esquema de la red hidráulica. '+d;lastDesc=d}
+    var parts=[];
+    if(g.bad.length) parts.push('sobrepresión en '+g.bad.join(', '));
+    if(g.warn.length) parts.push('presión insuficiente en '+g.warn.join(', '));
+    var a=parts.join('; ');
+    if(a!==lastAlert){
+      lastAlert=a;
+      sysText.textContent=a?'Alerta: '+a+'.':(mesh?'Flujo equilibrado en todas las viviendas, sin importar su altura.':'Presiones dentro del rango adecuado.');
+      if(announce){clearTimeout(timer);timer=setTimeout(function(){live.textContent=sysText.textContent},700)}
+    }
+  }
+  function labels(){
+    pumpOut.textContent=fmt(pump)+' de 5';demOut.textContent=fmt(dem)+' de 2';
+    pumpIn.setAttribute('aria-valuetext',fmt(pump)+' de 5');demIn.setAttribute('aria-valuetext',fmt(dem)+' de 2');
+  }
+  function refresh(announce){labels();updateUI(announce);if(!running)draw(calc())}
+
+  pumpIn.addEventListener('input',function(e){pump=parseFloat(e.target.value);refresh(true)});
+  demIn.addEventListener('input',function(e){dem=parseFloat(e.target.value);refresh(true)});
+
+  function setMode(m){
+    if(mesh===m) return;
+    mesh=m;
+    bMesh.setAttribute('aria-pressed',String(mesh));bConv.setAttribute('aria-pressed',String(!mesh));
+    modeEl.textContent=mesh?'Modo: red mallada con válvulas reguladoras activas':'Modo: red lineal convencional, sin válvulas reguladoras';
+    modeEl.className='mode'+(mesh?'':' bad');
+    lastAlert='\u0001';refresh(false);
+    clearTimeout(timer);timer=setTimeout(function(){live.textContent=modeEl.textContent+'. '+sysText.textContent},300);
+  }
+  bMesh.addEventListener('click',function(){setMode(true)});
+  bConv.addEventListener('click',function(){setMode(false)});
+
+  animBtn.setAttribute('aria-pressed',String(!running));
+  animBtn.addEventListener('click',function(){
+    running=!running;animBtn.setAttribute('aria-pressed',String(!running));
+    if(running) last=0; else draw(calc());
+  });
+  $('reset').addEventListener('click',function(){pump=3;dem=1;pumpIn.value=3;demIn.value=1;refresh(true)});
+
+  function loop(t){
+    if(running){
+      if(last) offset+=(t-last)/1000*(30+pump*22);
+      last=t;draw(calc());
+    }
+    requestAnimationFrame(loop);
+  }
+  refresh(false);draw(calc());requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
